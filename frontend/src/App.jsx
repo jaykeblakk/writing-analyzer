@@ -1,191 +1,51 @@
 import { useState } from 'react'
 import './App.css'
 
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001'
+
 function App() {
   const [file, setFile] = useState(null)
-  const [text, setText] = useState('')
   const [analysis, setAnalysis] = useState(null)
   const [previousAnalysis, setPreviousAnalysis] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
-  // Function to handle file upload
-  const handleFileUpload = (event) => {
+  // Function to handle file upload and send to backend
+  const handleFileUpload = async (event) => {
     const selectedFile = event.target.files[0]
-    if (selectedFile) {
-      setFile(selectedFile)
-      setError('')
-      setAnalysis(null)
-      extractText(selectedFile)
-    }
-  }
+    if (!selectedFile) return
 
-  // Function to extract text from different file types
-  const extractText = async (file) => {
-    setLoading(true)
+    setFile(selectedFile)
     setError('')
-    
-    try {
-      const fileType = file.type
-      let extractedText = ''
+    setAnalysis(null)
+    setPreviousAnalysis(null)
+    setLoading(true)
 
-      if (fileType === 'text/plain') {
-        // Handle text files
-        extractedText = await file.text()
-      } else if (fileType === 'application/pdf') {
-        // Handle PDF files (browser-compatible)
-        const arrayBuffer = await file.arrayBuffer()
-        const pdfjsLib = await import('pdfjs-dist/legacy/build/pdf.mjs')
-        
-        // Configure the worker
-        pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
-          'pdfjs-dist/legacy/build/pdf.worker.mjs',
-          import.meta.url
-        ).href
-        
-        const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise
-        let text = ''
-        
-        // Extract text from each page
-        for (let i = 1; i <= pdf.numPages; i++) {
-          const page = await pdf.getPage(i)
-          const textContent = await page.getTextContent()
-          const pageText = textContent.items.map(item => item.str).join(' ')
-          text += pageText + '\n'
-        }
-        
-        extractedText = text
-      } else if (fileType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
-        // Handle Word documents (.docx)
-        const arrayBuffer = await file.arrayBuffer()
-        const mammoth = await import('mammoth')
-        const result = await mammoth.extractRawText({ arrayBuffer })
-        extractedText = result.value
-      } else {
-        throw new Error('Unsupported file type. Please upload a .txt, .pdf, or .docx file.')
+    try {
+      // Create FormData to send file
+      const formData = new FormData()
+      formData.append('file', selectedFile)
+
+      // Send to backend API
+      const response = await fetch(`${API_URL}/api/analyze`, {
+        method: 'POST',
+        body: formData
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.message || 'Failed to analyze document')
       }
 
-      setText(extractedText)
-      analyzeText(extractedText, file.name)
+      const data = await response.json()
+      
+      setAnalysis(data.analysis)
+      setPreviousAnalysis(data.previousAnalysis)
     } catch (err) {
       setError(err.message)
-      setText('')
     } finally {
       setLoading(false)
     }
-  }
-
-  // Function to load previous analysis from localStorage
-  const loadPreviousAnalysis = (fileName) => {
-    try {
-      const stored = localStorage.getItem(`writing-analyzer-${fileName}`)
-      if (stored) {
-        return JSON.parse(stored)
-      }
-    } catch (err) {
-      console.error('Error loading previous analysis:', err)
-    }
-    return null
-  }
-
-  // Function to save analysis to localStorage
-  const saveAnalysis = (fileName, analysisData) => {
-    try {
-      const dataToSave = {
-        ...analysisData,
-        timestamp: new Date().toISOString(),
-        fileName: fileName
-      }
-      localStorage.setItem(`writing-analyzer-${fileName}`, JSON.stringify(dataToSave))
-    } catch (err) {
-      console.error('Error saving analysis:', err)
-    }
-  }
-
-  // Function to analyze the extracted text
-  const analyzeText = (text, fileName) => {
-    if (!text.trim()) {
-      setError('No text found in the document.')
-      return
-    }
-
-    // Load previous analysis for this file
-    const previous = loadPreviousAnalysis(fileName)
-    setPreviousAnalysis(previous)
-
-    // Basic text analysis
-    const words = text.trim().split(/\s+/).filter(word => word.length > 0)
-    const sentences = text.split(/[.!?]+/).filter(sentence => sentence.trim().length > 0)
-    
-    // Count paragraphs - split by line breaks and filter out empty lines
-    const lines = text.split(/\n+/).filter(line => line.trim().length > 0)
-    // Estimate paragraphs: count lines with substantial content (more than 10 chars)
-    const paragraphs = lines.filter(line => line.trim().length > 10)
-    
-    // Character counts
-    const totalCharacters = text.length
-    const charactersNoSpaces = text.replace(/\s/g, '').length
-    
-    // Word analysis
-    const uniqueWords = new Set(words.map(word => word.toLowerCase().replace(/[^\w]/g, ''))).size
-    const averageWordLength = words.reduce((sum, word) => sum + word.length, 0) / words.length
-    
-    // Sentence analysis
-    const averageWordsPerSentence = words.length / sentences.length
-    const averageSentenceLength = sentences.reduce((sum, sentence) => sum + sentence.trim().length, 0) / sentences.length
-    
-    // Reading level estimation (Flesch Reading Ease approximation)
-    const syllables = words.reduce((count, word) => count + countSyllables(word), 0)
-    const fleschScore = 206.835 - (1.015 * averageWordsPerSentence) - (84.6 * (syllables / words.length))
-    
-    // Common words analysis
-    const commonWords = ['the', 'be', 'to', 'of', 'and', 'a', 'in', 'that', 'have', 'i', 'it', 'for', 'not', 'on', 'with', 'he', 'as', 'you', 'do', 'at']
-    const commonWordCount = words.filter(word => 
-      commonWords.includes(word.toLowerCase().replace(/[^\w]/g, ''))
-    ).length
-
-    const analysisData = {
-      wordCount: words.length,
-      characterCount: totalCharacters,
-      characterCountNoSpaces: charactersNoSpaces,
-      sentenceCount: sentences.length,
-      paragraphCount: paragraphs.length,
-      uniqueWords: uniqueWords,
-      averageWordLength: Math.round(averageWordLength * 100) / 100,
-      averageWordsPerSentence: Math.round(averageWordsPerSentence * 100) / 100,
-      averageSentenceLength: Math.round(averageSentenceLength * 100) / 100,
-      fleschScore: Math.round(fleschScore * 100) / 100,
-      commonWordPercentage: Math.round((commonWordCount / words.length) * 100 * 100) / 100,
-      readingTime: Math.ceil(words.length / 200) // Assuming 200 words per minute
-    }
-
-    setAnalysis(analysisData)
-    
-    // Save to localStorage for future comparison
-    saveAnalysis(fileName, analysisData)
-  }
-
-  // Helper function to count syllables
-  const countSyllables = (word) => {
-    word = word.toLowerCase().replace(/[^\w]/g, '')
-    if (word.length <= 3) return 1
-    
-    const vowels = 'aeiouy'
-    let count = 0
-    let previousWasVowel = false
-    
-    for (let i = 0; i < word.length; i++) {
-      const isVowel = vowels.includes(word[i])
-      if (isVowel && !previousWasVowel) {
-        count++
-      }
-      previousWasVowel = isVowel
-    }
-    
-    // Handle silent 'e'
-    if (word.endsWith('e')) count--
-    
-    return Math.max(1, count)
   }
 
   // Function to calculate delta from previous analysis
@@ -197,7 +57,6 @@ function App() {
   // Function to reset the application
   const resetApp = () => {
     setFile(null)
-    setText('')
     setAnalysis(null)
     setPreviousAnalysis(null)
     setError('')
