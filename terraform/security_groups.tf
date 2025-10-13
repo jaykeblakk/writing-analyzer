@@ -12,14 +12,6 @@ resource "aws_security_group" "eks_nodes" {
     self      = true
   }
 
-  # Allow nodes to communicate with RDS
-  egress {
-    from_port       = 5432
-    to_port         = 5432
-    protocol        = "tcp"
-    security_groups = [aws_security_group.rds.id]
-  }
-
   # Allow nodes to communicate with the internet
   egress {
     from_port   = 0
@@ -39,14 +31,6 @@ resource "aws_security_group" "rds" {
   description = "Security group for RDS PostgreSQL database"
   vpc_id      = module.vpc.vpc_id
 
-  # Allow PostgreSQL access from EKS nodes
-  ingress {
-    from_port       = 5432
-    to_port         = 5432
-    protocol        = "tcp"
-    security_groups = [aws_security_group.eks_nodes.id]
-  }
-
   # Allow outbound traffic
   egress {
     from_port   = 0
@@ -59,3 +43,22 @@ resource "aws_security_group" "rds" {
     Name = "writing-analyzer-rds-sg"
   }
 }
+
+resource "aws_security_group_rule" "eks_to_rds" {
+  type                     = "egress"
+  from_port                = 5432
+  to_port                  = 5432
+  protocol                 = "tcp"
+  security_group_id        = aws_security_group.eks_nodes.id
+  source_security_group_id = aws_security_group.rds.id
+}
+
+resource "aws_security_group_rule" "rds_from_eks" {
+  type                     = "ingress"
+  from_port                = 5432
+  to_port                  = 5432
+  protocol                 = "tcp"
+  security_group_id        = aws_security_group.rds.id
+  source_security_group_id = aws_security_group.eks_nodes.id
+}
+
