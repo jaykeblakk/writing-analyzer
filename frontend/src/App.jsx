@@ -87,7 +87,7 @@ function App() {
               <label htmlFor="fileInput" className="file-label">
                 <div className="upload-icon">📁</div>
                 <div className="upload-text">
-                  <strong>Click to upload</strong>
+                  <strong>Click to upload file for analysis</strong>
                 </div>
                 <div className="upload-subtext">
                   Supports .txt, .pdf, and .docx files
