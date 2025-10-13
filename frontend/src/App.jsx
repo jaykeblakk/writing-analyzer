@@ -98,7 +98,7 @@ function App() {
             {loading && (
               <div className="loading">
                 <div className="spinner"></div>
-                <p>Analyzing your document...</p>
+                <p>Analyzing your document please wait...</p>
               </div>
             )}
 
