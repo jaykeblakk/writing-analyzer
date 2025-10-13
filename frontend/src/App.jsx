@@ -246,7 +246,7 @@ function App() {
       </main>
 
       <footer className="app-footer">
-        <p>Built with React • Upload your documents to get started</p>
+        <p>Built by Coby Carter</p>
       </footer>
     </div>
   )
