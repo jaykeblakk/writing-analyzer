@@ -246,7 +246,7 @@ function App() {
       </main>
 
       <footer className="app-footer">
-        <p>Built by Coby Carter</p>
+        <p>Built by Coby Carter using React</p>
       </footer>
     </div>
   )
