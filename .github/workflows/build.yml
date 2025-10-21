@@ -65,7 +65,7 @@ jobs:
         id: rds
         working-directory: ./terraform
         run: |
-          ENDPOINT=$(terraform output -raw rds_endpoint)
+          ENDPOINT=$(terraform output -raw rds_endpoint 2>/dev/null)
           echo "endpoint=$ENDPOINT" >> $GITHUB_OUTPUT
 
       - name: Create Kubernetes Secret
