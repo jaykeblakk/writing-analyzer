@@ -3,7 +3,7 @@ module "eks" {
   version = "20.8.5"
 
   cluster_name                             = "writing_analyzer_cluster"
-  cluster_version                          = "1.29"
+  cluster_version                          = "1.34"
   cluster_endpoint_public_access           = true
   enable_cluster_creator_admin_permissions = true
 
