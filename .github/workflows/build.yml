@@ -45,11 +45,21 @@ jobs:
         run: |
           aws ecr get-login-password --region us-west-2 | docker login --username AWS --password-stdin ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-west-2.amazonaws.com
 
-      - name: Push backend image to ECR
-        run: docker push ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-west-2.amazonaws.com/writing-analyzer-backend:latest
+      - name: Build backend Docker image
+        run: docker build -t writing-analyzer-backend:latest ./backend
 
-      - name: Push frontend image to ECR
-        run: docker push ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-west-2.amazonaws.com/writing-analyzer-frontend:latest
+      - name: Build frontend Docker image
+        run: docker build -t writing-analyzer-frontend:latest ./frontend
+
+      - name: Tag and push backend image to ECR
+        run: |
+          docker tag writing-analyzer-backend:latest ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-west-2.amazonaws.com/writing-analyzer-backend:latest
+          docker push ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-west-2.amazonaws.com/writing-analyzer-backend:latest
+
+      - name: Tag and push frontend image to ECR
+        run: |
+          docker tag writing-analyzer-frontend:latest ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-west-2.amazonaws.com/writing-analyzer-frontend:latest
+          docker push ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-west-2.amazonaws.com/writing-analyzer-frontend:latest
 
       - name: Get RDS Endpoint
         id: rds
