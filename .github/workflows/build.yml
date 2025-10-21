@@ -45,6 +45,12 @@ jobs:
         run: |
           aws ecr get-login-password --region us-west-2 | docker login --username AWS --password-stdin ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-west-2.amazonaws.com
 
+      - name: Build backend Docker image
+        run: docker build -t writing-analyzer-backend:latest ./backend
+
+      - name: Build frontend Docker image
+        run: docker build -t writing-analyzer-frontend:latest ./frontend
+
       - name: Tag and push backend image to ECR
         run: |
           docker tag writing-analyzer-backend:latest ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-west-2.amazonaws.com/writing-analyzer-backend:latest
