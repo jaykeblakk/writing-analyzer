@@ -65,14 +65,34 @@ jobs:
         id: rds
         working-directory: ./terraform
         run: |
-          ENDPOINT=$(terraform output -raw rds_endpoint 2>/dev/null)
+          # Disable terraform debug output and get clean endpoint
+          export TF_LOG=OFF
+          ENDPOINT=$(terraform output -raw rds_endpoint 2>/dev/null | head -n1)
           echo "endpoint=$ENDPOINT" >> $GITHUB_OUTPUT
+          echo "RDS Endpoint: $ENDPOINT"
+
+      - name: Get EKS Cluster Name
+        id: eks
+        working-directory: ./terraform
+        run: |
+          export TF_LOG=OFF
+          CLUSTER_NAME=$(terraform output -raw eks_cluster_name 2>/dev/null | head -n1)
+          echo "cluster_name=$CLUSTER_NAME" >> $GITHUB_OUTPUT
+          echo "EKS Cluster: $CLUSTER_NAME"
+
+      - name: Configure kubectl
+        run: |
+          aws eks update-kubeconfig --region us-west-2 --name ${{ steps.eks.outputs.cluster_name }}
 
       - name: Create Kubernetes Secret
         run: |
+          # Check if secret already exists and delete it first
+          kubectl delete secret db-secret --ignore-not-found=true
           kubectl create secret generic db-secret \
-            --from-literal=DATABASE_URL="postgresql://${{ secrets.DB_USERNAME }}:${{ secrets.DB_PASSWORD }}@${{ steps.rds.outputs.endpoint }}:5432/${{ secrets.DB_NAME }}" \
-            --dry-run=client -o yaml | kubectl apply -f -
+            --from-literal=DATABASE_URL="postgresql://${{ secrets.DB_USERNAME }}:${{ secrets.DB_PASSWORD }}@${{ steps.rds.outputs.endpoint }}:5432/${{ secrets.DB_NAME }}"
 
       - name: Deploy to Kubernetes
-        run: kubectl apply -f k8s/
+        run: |
+          echo "Deploying to Kubernetes..."
+          kubectl apply -f k8s/
+          echo "Deployment completed successfully"
