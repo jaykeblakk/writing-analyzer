@@ -195,7 +195,7 @@ function App() {
 
               <div className="stat-card">
                 <div className="stat-number">{analysis.fleschScore}</div>
-                <div className="stat-label">Flesch Reading Score</div>
+                <div className="stat-label">Flesch Reading Score (approx.)</div>
                 <div className="stat-description">
                   {analysis.fleschScore >= 90 ? 'Very Easy' :
                    analysis.fleschScore >= 80 ? 'Easy' :
