@@ -77,11 +77,29 @@ jobs:
         run: |
           export TF_LOG=OFF
           echo "Getting EKS cluster name..."
-          CLUSTER_NAME=$(terraform output -raw eks_cluster_name 2>/dev/null | head -n1)
-          if [ -z "$CLUSTER_NAME" ]; then
-            echo "Error: Could not retrieve EKS cluster name"
+          
+          # Try different approaches to get the cluster name
+          CLUSTER_NAME=$(terraform output -raw eks_cluster_name 2>&1 | grep -v "Warning" | head -n1)
+          
+          # If that doesn't work, try without -raw flag
+          if [ -z "$CLUSTER_NAME" ] || [[ "$CLUSTER_NAME" == *"terraform-bin"* ]]; then
+            echo "Trying alternative method..."
+            CLUSTER_NAME=$(terraform output eks_cluster_name 2>&1 | grep -v "Warning" | sed 's/"//g' | head -n1)
+          fi
+          
+          # If still no luck, try to get it from terraform show
+          if [ -z "$CLUSTER_NAME" ] || [[ "$CLUSTER_NAME" == *"terraform-bin"* ]]; then
+            echo "Trying terraform show method..."
+            CLUSTER_NAME=$(terraform show -json | jq -r '.values.root_module.child_modules[] | select(.address == "module.eks") | .resources[] | select(.type == "aws_eks_cluster") | .values.name' 2>/dev/null)
+          fi
+          
+          if [ -z "$CLUSTER_NAME" ] || [[ "$CLUSTER_NAME" == *"terraform-bin"* ]]; then
+            echo "Error: Could not retrieve EKS cluster name. Got: $CLUSTER_NAME"
+            echo "Available outputs:"
+            terraform output
             exit 1
           fi
+          
           echo "cluster_name=$CLUSTER_NAME" >> $GITHUB_OUTPUT
           echo "EKS Cluster: $CLUSTER_NAME"
           
