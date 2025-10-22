@@ -71,17 +71,10 @@ jobs:
           echo "endpoint=$ENDPOINT" >> $GITHUB_OUTPUT
           echo "RDS Endpoint: $ENDPOINT"
 
-      - name: Get EKS Cluster Name and Configure kubectl
-        id: eks
-        working-directory: ./terraform
+      - name: Configure kubectl
         run: |
-          echo "Getting EKS cluster name..."
-          CLUSTER_NAME=$(terraform output -raw eks_cluster_name)
-          echo "cluster_name=$CLUSTER_NAME" >> $GITHUB_OUTPUT
-          echo "EKS Cluster: $CLUSTER_NAME"
-          
-          echo "Configuring kubectl for cluster: $CLUSTER_NAME"
-          aws eks update-kubeconfig --region us-west-2 --name $CLUSTER_NAME
+          echo "Configuring kubectl for cluster: writing_analyzer_cluster"
+          aws eks update-kubeconfig --region us-west-2 --name writing_analyzer_cluster
 
       - name: Create Kubernetes Secret
         run: |
