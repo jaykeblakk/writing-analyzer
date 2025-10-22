@@ -74,7 +74,20 @@ jobs:
       - name: Configure kubectl
         run: |
           echo "Configuring kubectl for cluster: writing_analyzer_cluster"
+          
+          # Debug AWS credentials
+          echo "AWS credentials check:"
+          aws sts get-caller-identity
+          
+          # Configure kubectl
           aws eks update-kubeconfig --region us-west-2 --name writing_analyzer_cluster
+          
+          # Debug kubeconfig
+          echo "Kubeconfig contents:"
+          cat ~/.kube/config
+          
+          # Test kubectl connection
+          kubectl get nodes
 
       - name: Create Kubernetes Secret
         run: |
