@@ -3,9 +3,9 @@ provider "aws" {
 }
 
 locals {
-  name   = "ascode-cluster"
+  name   = "test-cluster"
   region = "us-west-1"
-  vpcname   = "ascode-cluster"
+  vpcname   = "test-cluster-vpc"
   vpc_cidr = "10.123.0.0/16"
   azs      = ["us-west-1a", "us-west-1b"]
 
