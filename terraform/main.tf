@@ -5,7 +5,7 @@ provider "aws" {
 locals {
   name   = "ascode-cluster"
   region = "us-west-1"
-
+  vpcname   = "ascode-cluster"
   vpc_cidr = "10.123.0.0/16"
   azs      = ["us-west-1a", "us-west-1b"]
 
@@ -22,7 +22,7 @@ module "vpc" {
   source  = "terraform-aws-modules/vpc/aws"
   version = "~> 4.0"
 
-  name = local.name
+  name = local.vpcname
   cidr = local.vpc_cidr
 
   azs             = local.azs
