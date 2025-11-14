@@ -44,6 +44,7 @@ module "vpc" {
 module "eks" {
   source  = "terraform-aws-modules/eks/aws"
   version = "21.8.0"
+  kubernetes_version = "1.33"
 
   name                   = local.name
 
