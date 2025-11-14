@@ -44,7 +44,7 @@ module "vpc" {
 module "eks" {
   source  = "terraform-aws-modules/eks/aws"
   version = "21.8.0"
-  kubernetes_version = "1.33"
+  kubernetes_version = "1.34"
 
   name                   = local.name
 
@@ -70,7 +70,7 @@ module "eks" {
       max_size     = 2
       desired_size = 1
       ami_type       = "AL2023_x86_64_STANDARD"
-      instance_types = ["t3.micro"]
+      instance_types = ["t3.large"]
       capacity_type  = "SPOT"
       attach_cluster_primary_security_group = true
 
