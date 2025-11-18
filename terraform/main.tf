@@ -70,7 +70,7 @@ module "eks" {
       max_size     = 2
       desired_size = 1
       ami_type       = "AL2023_x86_64_STANDARD"
-      instance_types = ["t3.large"]
+      instance_types = ["t3.micro"]
       capacity_type  = "SPOT"
       attach_cluster_primary_security_group = true
 
