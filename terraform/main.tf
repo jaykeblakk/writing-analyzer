@@ -60,6 +60,7 @@ module "eks" {
     vpc-cni = {
       most_recent = true
       before_compute = true
+      resolve_conflicts = "OVERWRITE"
     }
   }
 
