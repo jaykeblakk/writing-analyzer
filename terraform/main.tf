@@ -78,7 +78,7 @@ module "eks" {
       attach_cluster_primary_security_group = true
 
       tags = {
-        ExtraTag = "helloworld"
+        ExtraTag = "testtag"
       }
     }
   }
