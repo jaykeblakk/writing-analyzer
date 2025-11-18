@@ -49,16 +49,12 @@ module "eks" {
   name                   = local.name
 
   addons = {
-    coredns = {
-      most_recent = true
+    coredns = {}
+    eks-pod-identity-agent = {
       before_compute = true
     }
-    kube-proxy = {
-      most_recent = true
-      before_compute = true
-    }
+    kube-proxy = {}
     vpc-cni = {
-      most_recent = true
       before_compute = true
     }
   }
@@ -68,7 +64,7 @@ module "eks" {
   control_plane_subnet_ids = module.vpc.intra_subnets
 
   eks_managed_node_groups = {
-    ascode-cluster-wg = {
+    test-cluster-wg = {
       min_size     = 1
       max_size     = 2
       desired_size = 1
@@ -84,12 +80,4 @@ module "eks" {
   }
 
   tags = local.tags
-}
-
-resource "aws_eks_addon" "vpc-cni" {
-  cluster_name                = "test-cluster"
-  addon_name                  = "vpc-cni"
-  addon_version               = "v1.20.4-eksbuild.1"
-  resolve_conflicts_on_update = "OVERWRITE"
-  resolve_conflicts_on_create = "OVERWRITE"
 }
