@@ -60,7 +60,6 @@ module "eks" {
     vpc-cni = {
       most_recent = true
       before_compute = true
-      resolve_conflicts = "OVERWRITE"
     }
   }
 
@@ -85,4 +84,12 @@ module "eks" {
   }
 
   tags = local.tags
+}
+
+resource "aws_eks_addon" "vpc-cni" {
+  cluster_name                = aws_eks_cluster.example.name
+  addon_name                  = "vpc-cni"
+  addon_version               = "v1.20.4-eksbuild.1"
+  resolve_conflicts_on_update = "OVERWRITE"
+  resolve_conflicts_on_create = "OVERWRITE"
 }
