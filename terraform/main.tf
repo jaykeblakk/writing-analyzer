@@ -11,7 +11,6 @@ locals {
 
   public_subnets  = ["10.123.1.0/24", "10.123.2.0/24"]
   private_subnets = ["10.123.3.0/24", "10.123.4.0/24"]
-  intra_subnets   = ["10.123.5.0/24", "10.123.6.0/24"]
 
   tags = {
     Example = local.name
@@ -28,7 +27,6 @@ module "vpc" {
   azs             = local.azs
   private_subnets = local.private_subnets
   public_subnets  = local.public_subnets
-  intra_subnets   = local.intra_subnets
 
   enable_nat_gateway = true
 
@@ -47,20 +45,6 @@ module "eks" {
   kubernetes_version = "1.34"
 
   name                   = local.name
-
-  addons = {
-    coredns = {
-      resolve_conflicts = "OVERWRITE"
-    }
-    eks-pod-identity-agent = {
-      before_compute = true
-    }
-    kube-proxy = {}
-    vpc-cni = {
-      before_compute = true
-      resolve_conflicts = "OVERWRITE"
-    }
-  }
 
   vpc_id                   = module.vpc.vpc_id
   subnet_ids               = module.vpc.private_subnets
