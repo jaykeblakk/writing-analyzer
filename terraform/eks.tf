@@ -7,7 +7,7 @@ module "eks" {
 
   vpc_id                   = module.vpc.vpc_id
   subnet_ids               = module.vpc.public_subnets
-  
+
   enable_cluster_creator_admin_permissions = true
 
   eks_managed_node_groups = {
@@ -25,6 +25,4 @@ module "eks" {
       }
     }
   }
-
-  tags = local.tags
 }
