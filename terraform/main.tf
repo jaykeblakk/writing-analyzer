@@ -49,13 +49,16 @@ module "eks" {
   name                   = local.name
 
   addons = {
-    coredns = {}
+    coredns = {
+      resolve_conflicts = "OVERWRITE"
+    }
     eks-pod-identity-agent = {
       before_compute = true
     }
     kube-proxy = {}
     vpc-cni = {
       before_compute = true
+      resolve_conflicts = "OVERWRITE"
     }
   }
 
