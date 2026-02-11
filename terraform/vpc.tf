@@ -2,7 +2,7 @@ module "vpc" {
   source  = "terraform-aws-modules/vpc/aws"
   version = "6.5.0"
 
-  name = "test-cluster-vpc"
+  name = "writing-analyzer-vpc"
   cidr = "10.0.0.0/16"
 
   azs             = ["us-west-1a", "us-west-1b"]
@@ -10,7 +10,7 @@ module "vpc" {
   public_subnets  = ["10.0.11.0/24", "10.0.12.0/24"]
 
   map_public_ip_on_launch = true
-  enable_nat_gateway = false
+  enable_nat_gateway     = true
 
   public_subnet_tags = {
     "kubernetes.io/role/elb" = 1

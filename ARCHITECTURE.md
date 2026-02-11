@@ -95,16 +95,15 @@ function analyzeWriting(text) {
 - Called automatically on server startup
 
 **`getPreviousUpload()`:**
-- Queries PostgreSQL for the most recent upload
-- Uses `ORDER BY created_at DESC LIMIT 1` to get latest
-- Returns the previous upload's statistics
+- Queries PostgreSQL for the stored upload (only one row exists)
+- Returns the previous upload's statistics for comparison
 - Returns `null` if no previous upload exists
 
 **`saveUpload()`:**
-- Inserts current statistics as a new row in PostgreSQL
-- Maintains full history (doesn't overwrite previous entries)
+- Deletes any existing row, then inserts the new statistics
+- Only the most recent upload is kept (replaces on each upload)
+- Minimizes storage for cost-effective snapshot workflow
 - Returns the created timestamp
-- Uses parameterized queries to prevent SQL injection
 
 ### Step 6: API Endpoint - `/api/analyze`
 
@@ -113,9 +112,9 @@ function analyzeWriting(text) {
 2. Reads PDF file from disk
 3. Extracts text using `pdf-parse`
 4. Analyzes text with `analyzeWriting()`
-5. Fetches previous upload from PostgreSQL (most recent row)
+5. Fetches previous upload from PostgreSQL (single row, if any)
 6. Calculates differences (current - previous)
-7. Saves current upload to PostgreSQL (new row, maintains history)
+7. Saves current upload to PostgreSQL (replaces previous - only one row kept)
 8. Deletes temporary file
 9. Returns JSON response with stats and differences
 
@@ -273,13 +272,14 @@ CREATE TABLE writing_uploads (
 - `id`: Auto-incrementing primary key (SERIAL)
 - All statistics stored as appropriate data types
 - `created_at`: Automatically set on insert
-- Index on `created_at` for fast queries of most recent upload
-- Maintains full history (each upload is a new row)
+- **Single-row storage**: Each new upload replaces the previous one (DELETE + INSERT)
+- Minimizes storage for cost-effective snapshot workflow
 
 **Query Pattern:**
-- To get the most recent upload: `ORDER BY created_at DESC LIMIT 1`
-- All uploads are preserved, allowing for historical analysis
-- Perfect for RDS snapshots - all data is preserved in the snapshot
+- Only one row exists at a time
+- `saveUpload`: DELETE all rows, then INSERT the new one
+- `getPreviousUpload`: SELECT the single row (for comparison with current upload)
+- Perfect for cost optimization: snapshot → delete DB → pay only for snapshot storage
 
 ---
 
@@ -317,13 +317,14 @@ CREATE TABLE writing_uploads (
 - `DB_SSL` - 'true' for RDS, 'false' for local
 - `PORT` - Backend server port (optional, defaults to 3001)
 
-**RDS Snapshot Workflow:**
+**RDS Snapshot Workflow (Cost-Optimized):**
 1. Create RDS PostgreSQL instance via Terraform
 2. Restore from snapshot (if exists) when starting session
 3. Application auto-creates table schema on startup
-4. Use application normally - all data stored in database
-5. Take final snapshot before destroying database
-6. Next session: restore from latest snapshot to continue
+4. Use application - only the most recent upload is stored (replaced on each upload)
+5. Take final snapshot when done
+6. Delete the database instance - you only pay for snapshot storage
+7. Next session: restore from snapshot into a new database to continue
 
 ---
 

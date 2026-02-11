@@ -1,28 +1,19 @@
 # Writing Analyzer
 
-A modern React application that analyzes your writing from PDF documents, tracks your progress toward a 100,000-word goal, and compares your current writing with previous uploads.
-
-## Features
-
-- 📄 **PDF Upload & Analysis**: Upload PDF documents and get comprehensive writing statistics
-- 📊 **Writing Statistics**: Word count, sentence count, paragraph count, character counts, and averages
-- 📈 **Progress Tracking**: Visual progress bar showing your journey to 100,000 words
-- 🔄 **Comparison Tracking**: See how much you've added since your last upload (shown in green)
-- 🌙 **Dark Mode**: Beautiful dark theme designed for comfortable viewing
-- ☁️ **AWS Integration**: Stores your writing stats in AWS RDS (PostgreSQL) for persistence
+A React application that analyzes writing from PDF documents, tracks progress toward a 100,000 word goal, and compares the writing of the current file from .
 
 ## Tech Stack
 
 ### Frontend
-- **React 18** with TypeScript
-- **Vite** - Modern build tool for fast development
-- **CSS3** - Custom dark theme styling
+- React 18 with TypeScript
+- Vite
+- CSS3
 
 ### Backend
-- **Node.js** with Express
-- **pdf-parse** - PDF text extraction
-- **PostgreSQL** - RDS database for data persistence
-- **Multer** - File upload handling
+- Node.js with Express
+- pdf-parse
+- PostgreSQL
+- Multer
 
 ## Setup Instructions
 
@@ -122,17 +113,18 @@ npm run build
 
 4. **Set environment variables** in your Kubernetes deployment for database credentials
 
-### Database Snapshots (RDS)
+### Database Snapshots (RDS) - Cost-Optimized Workflow
 
-This application is designed to work with RDS database snapshots:
+This application is designed for a minimal-cost RDS snapshot workflow:
 
 1. **Initial Setup**: Create an RDS PostgreSQL database via Terraform
 2. **Restore from Snapshot**: Restore your database from a snapshot when starting a session
-3. **Usage**: Upload and analyze your writing - all data is stored in the database
-4. **Final Snapshot**: Before destroying the database, take a final snapshot
-5. **Next Session**: Restore from the latest snapshot to continue where you left off
+3. **Usage**: Upload and analyze your writing - **only the most recent upload is stored** (each new upload replaces the previous one)
+4. **Final Snapshot**: When done, take a snapshot of the database
+5. **Delete Database**: Destroy the database instance - you only pay for the snapshot storage
+6. **Next Session**: Restore from the snapshot into a new database to continue where you left off
 
-The application automatically creates the table schema on startup, so you only need to ensure the database exists and is accessible.
+By storing only one row and keeping just the snapshot between sessions, you minimize costs (no ongoing database instance charges).
 
 ## How It Works
 
@@ -147,15 +139,15 @@ The application automatically creates the table schema on startup, so you only n
    - Character counts (with and without spaces)
    - Average words per sentence
    - Average characters per word
-4. **Database Lookup**: Backend queries PostgreSQL for the most recent upload
+4. **Database Lookup**: Backend queries PostgreSQL for the previous upload (if any)
 5. **Comparison**: Calculates differences between current and previous stats
-6. **Storage**: Saves current stats to PostgreSQL (adds new row, keeps history)
+6. **Storage**: Saves current stats to PostgreSQL (replaces previous upload - only one row is ever kept)
 7. **Response**: Returns stats and differences to frontend
 8. **Display**: Frontend displays stats with green indicators for increases, progress bar, and percentage
 
 ### Database Schema
 
-The PostgreSQL table `writing_uploads` stores all uploads with the following structure:
+The PostgreSQL table `writing_uploads` stores **only the most recent upload** (single row, replaced on each upload) with the following structure:
 - `id`: SERIAL (auto-incrementing primary key)
 - `word_count`: INTEGER
 - `sentence_count`: INTEGER
@@ -167,7 +159,7 @@ The PostgreSQL table `writing_uploads` stores all uploads with the following str
 - `created_at`: TIMESTAMP (auto-set on insert)
 - `updated_at`: TIMESTAMP (auto-set on insert)
 
-**Note**: The application queries for the most recent upload (ORDER BY created_at DESC LIMIT 1) to compare with the current upload. All uploads are stored, maintaining a history of your writing progress.
+**Note**: Each new upload replaces the previous one. Only one row exists at a time, minimizing storage for the snapshot workflow.
 
 ## Project Structure
 
@@ -192,49 +184,4 @@ writing-analyzer/
 │   └── .env                        # Environment variables (not in git)
 └── README.md
 ```
-
-## API Endpoints
-
-### POST `/api/analyze`
-Uploads and analyzes a PDF file.
-
-**Request**: Multipart form data with `pdf` field
-
-**Response**:
-```json
-{
-  "success": true,
-  "stats": {
-    "wordCount": 40000,
-    "sentenceCount": 2500,
-    "charCount": 200000,
-    "charCountNoSpaces": 180000,
-    "paragraphCount": 500,
-    "avgWordsPerSentence": 16.0,
-    "avgCharsPerWord": 4.5
-  },
-  "differences": {
-    "wordCount": 5000,
-    "sentenceCount": 300,
-    ...
-  },
-  "previousUpload": {
-    "wordCount": 35000,
-    "timestamp": "2024-01-01T00:00:00.000Z"
-  }
-}
-```
-
-### GET `/api/health`
-Health check endpoint.
-
-## Customization
-
-- **Target Word Count**: Change `TARGET_WORDS` in `ProgressBar.tsx` (currently 100,000)
-- **File Size Limit**: Modify the `limits.fileSize` in `backend/server.js` (currently 50MB)
-- **Color Scheme**: Adjust CSS variables in component CSS files
-
-## License
-
-ISC
 

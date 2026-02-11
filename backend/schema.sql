@@ -1,6 +1,9 @@
 -- PostgreSQL schema for Writing Analyzer
 -- This file can be used to manually create the table if needed
 -- The application will auto-create it on startup via database.js
+--
+-- Storage model: Only the most recent upload is kept. Each new upload replaces the previous one.
+-- This minimizes storage costs when using the snapshot workflow (snapshot → delete DB → pay only for snapshot).
 
 CREATE TABLE IF NOT EXISTS writing_uploads (
   id SERIAL PRIMARY KEY,
@@ -15,9 +18,7 @@ CREATE TABLE IF NOT EXISTS writing_uploads (
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Index for faster queries on most recent upload
-CREATE INDEX IF NOT EXISTS idx_writing_uploads_created_at ON writing_uploads(created_at DESC);
+COMMENT ON TABLE writing_uploads IS 'Stores only the most recent writing analysis (single row, replaced on each upload)';
 
--- Optional: Add a comment to the table
-COMMENT ON TABLE writing_uploads IS 'Stores writing analysis statistics from PDF uploads';
+
 
