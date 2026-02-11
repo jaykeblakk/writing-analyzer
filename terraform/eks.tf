@@ -7,6 +7,19 @@ module "eks" {
   endpoint_public_access                    = true
   enable_cluster_creator_admin_permissions = true
 
+  access_entries = {
+    for i, arn in var.cluster_admin_principal_arns : "admin-${i}" => {
+      principal_arn = arn
+      type          = "STANDARD"
+      policy_associations = {
+        admin = {
+          policy_arn   = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"
+          access_scope = { type = "cluster" }
+        }
+      }
+    }
+  }
+
   addons = {
     vpc-cni = {
       most_recent = true
