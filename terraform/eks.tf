@@ -34,7 +34,7 @@ module "eks" {
     default = {
       instance_types       = ["t3.small"]
       use_name_prefix      = false
-      iam_role_name        = "writing-analyzer-eks-cluster-role"
+      iam_role_name        = "writing-analyzer-eks-cluster"
       iam_role_use_name_prefix = false
 
       min_size     = 1
