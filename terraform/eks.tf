@@ -22,8 +22,11 @@ module "eks" {
 
   addons = {
     vpc-cni = {
-      most_recent = true
+      most_recent    = true
       before_compute = true
+    }
+    coredns = {
+      most_recent = true
     }
   }
 
