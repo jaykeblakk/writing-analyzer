@@ -1,5 +1,9 @@
 import { useRef } from 'react';
+import * as pdfjsLib from 'pdfjs-dist';
+import { analyzeWriting } from '../utils/analyzeWriting';
 import './FileUpload.css';
+
+pdfjsLib.GlobalWorkerOptions.workerSrc = new URL('pdfjs-dist/build/pdf.worker.mjs', import.meta.url).toString();
 
 interface FileUploadProps {
   onAnalysisComplete: (result: any) => void;
@@ -9,55 +13,79 @@ interface FileUploadProps {
 
 function FileUpload({ onAnalysisComplete, onError, onLoading }: FileUploadProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+  const API_URL = import.meta.env.VITE_API_URL || '';
 
   const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
-    // Validate file type
     if (file.type !== 'application/pdf') {
       onError('Please upload a PDF file');
       return;
     }
 
-    // Validate file size (50MB limit)
     if (file.size > 50 * 1024 * 1024) {
       onError('File size must be less than 50MB');
       return;
     }
 
-    const formData = new FormData();
-    formData.append('pdf', file);
-
     try {
       onLoading(true);
-      const response = await fetch(`${API_URL}/api/analyze`, {
+
+      // Parse PDF in the browser (pdfjs-dist works here - DOMMatrix exists)
+      const arrayBuffer = await file.arrayBuffer();
+      const uint8Array = new Uint8Array(arrayBuffer);
+      const loadingTask = pdfjsLib.getDocument({ data: uint8Array });
+      const pdfDocument = await loadingTask.promise;
+
+      let text = '';
+      for (let pageNum = 1; pageNum <= pdfDocument.numPages; pageNum++) {
+        const page = await pdfDocument.getPage(pageNum);
+        const textContent = await page.getTextContent();
+
+        let pageText = '';
+        let lastY: number | null = null;
+
+        for (const item of textContent.items) {
+          const txItem = item as { str: string; transform?: number[] };
+          if (lastY !== null && txItem.transform?.[5]) {
+            const yGap = Math.abs(lastY - txItem.transform[5]);
+            if (yGap > 15) pageText += '\n\n';
+            else if (yGap > 5) pageText += '\n';
+            else pageText += ' ';
+          }
+          pageText += txItem.str;
+          if (txItem.transform?.[5]) lastY = txItem.transform[5];
+        }
+        text += pageText + '\n\n';
+      }
+
+      const stats = analyzeWriting(text);
+
+      // Send stats to backend for storage and comparison
+      const baseUrl = API_URL || window.location.origin;
+      const response = await fetch(`${baseUrl}/api/stats`, {
         method: 'POST',
-        body: formData,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ stats }),
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to analyze PDF');
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.error || 'Failed to save stats');
       }
 
       const result = await response.json();
       onAnalysisComplete(result);
-    } catch (error: any) {
-      onError(error.message || 'An error occurred while analyzing the PDF');
+    } catch (error: unknown) {
+      onError(error instanceof Error ? error.message : 'An error occurred while analyzing the PDF');
     } finally {
       onLoading(false);
-      // Reset file input
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
-      }
+      if (fileInputRef.current) fileInputRef.current.value = '';
     }
   };
 
-  const handleClick = () => {
-    fileInputRef.current?.click();
-  };
+  const handleClick = () => fileInputRef.current?.click();
 
   return (
     <div className="file-upload">
@@ -94,4 +122,3 @@ function FileUpload({ onAnalysisComplete, onError, onLoading }: FileUploadProps)
 }
 
 export default FileUpload;
-
