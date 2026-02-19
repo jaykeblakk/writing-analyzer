@@ -3,7 +3,8 @@ import * as pdfjsLib from 'pdfjs-dist';
 import { analyzeWriting } from '../utils/analyzeWriting';
 import './FileUpload.css';
 
-pdfjsLib.GlobalWorkerOptions.workerSrc = new URL('pdfjs-dist/build/pdf.worker.mjs', import.meta.url).toString();
+// Use unpkg CDN for worker - avoids .mjs MIME type issues with nginx in production
+pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
 
 interface FileUploadProps {
   onAnalysisComplete: (result: any) => void;
