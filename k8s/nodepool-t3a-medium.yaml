@@ -1,0 +1,35 @@
+# Optional: Apply this to prefer t3a.medium instances in EKS Auto Mode.
+# The built-in general-purpose pool may use various instance types.
+# This custom NodePool restricts to t3a.medium (2 vCPU, 4GB - smallest compliant).
+#
+# kubectl apply -f k8s/nodepool-t3a-medium.yaml
+#
+# Note: Requires the default NodeClass. If using a cluster with no built-in pools,
+# you must create a NodeClass first.
+---
+apiVersion: karpenter.sh/v1
+kind: NodePool
+metadata:
+  name: t3a-medium
+spec:
+  template:
+    metadata:
+      labels:
+        workload: writing-analyzer
+    spec:
+      nodeClassRef:
+        group: eks.amazonaws.com
+        kind: NodeClass
+        name: default
+      requirements:
+        - key: node.kubernetes.io/instance-type
+          operator: In
+          values: ["t3a.medium"]
+        - key: kubernetes.io/arch
+          operator: In
+          values: ["amd64"]
+  limits:
+    cpu: "1000"
+    memory: 1000Gi
+  disruption:
+    consolidationPolicy: WhenEmptyOrUnderutilized

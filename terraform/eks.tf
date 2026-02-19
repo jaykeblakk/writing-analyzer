@@ -7,6 +7,13 @@ module "eks" {
   endpoint_public_access                    = true
   enable_cluster_creator_admin_permissions = true
 
+  # EKS Auto Mode - AWS manages compute, networking, storage
+  # general-purpose uses smallest compliant instances (t3a.medium, t3.medium, m5.large, etc.)
+  compute_config = {
+    enabled    = true
+    node_pools = ["general-purpose"]
+  }
+
   access_entries = {
     for i, arn in var.cluster_admin_principal_arns : "admin-${i}" => {
       principal_arn = arn
@@ -32,24 +39,6 @@ module "eks" {
 
   vpc_id     = module.vpc.vpc_id
   subnet_ids = module.vpc.private_subnets
-
-  eks_managed_node_groups = {
-    default = {
-      ami_type             = "BOTTLEROCKET_x86_64"  # Avoids AL2023 cloud-init bug; container-optimized OS
-      instance_types       = ["t3.small"]
-      use_name_prefix      = false
-      iam_role_name        = "writing-analyzer-eks-node"
-      iam_role_use_name_prefix = false
-
-      min_size     = 1
-      max_size     = 2
-      desired_size = 1
-
-      update_config = {
-        max_unavailable_percentage = 50
-      }
-    }
-  }
 
   tags = local.tags
 }
