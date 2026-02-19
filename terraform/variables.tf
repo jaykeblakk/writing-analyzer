@@ -17,7 +17,7 @@ variable "cluster_version" {
 }
 
 variable "cluster_admin_principal_arns" {
-  description = "List of IAM principal ARNs (users or roles) to grant cluster admin access. Set in HCP Terraform - e.g. arn:aws:iam::ACCOUNT_ID:user/username"
+  description = "List of IAM principal ARNs (users or roles) to grant cluster admin access. Set in terraform.tfvars or HCP Terraform."
   type        = list(string)
   default     = []
 }

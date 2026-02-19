@@ -35,7 +35,7 @@ module "eks" {
 
   eks_managed_node_groups = {
     default = {
-      ami_type             = "AL2_x86_64"  # AL2023 has cloud-init issues with EKS user data
+      ami_type             = "AL2023_x86_64_standard"  # Required for 1.35; AL2 AMIs deprecated
       instance_types       = ["t3.small"]
       use_name_prefix      = false
       iam_role_name        = "writing-analyzer-eks-node"
