@@ -35,7 +35,7 @@ module "eks" {
 
   eks_managed_node_groups = {
     default = {
-      ami_type             = "AL2023_x86_64_STANDARD"  # Required for 1.35; AL2 AMIs deprecated
+      ami_type             = "BOTTLEROCKET_x86_64"  # Avoids AL2023 cloud-init bug; container-optimized OS
       instance_types       = ["t3.small"]
       use_name_prefix      = false
       iam_role_name        = "writing-analyzer-eks-node"
