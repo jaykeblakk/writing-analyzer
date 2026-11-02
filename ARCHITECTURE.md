@@ -5,10 +5,10 @@ This document explains the application architecture and walks through the code s
 ## Overview
 
 The Writing Analyzer is a full-stack application with:
-- **Frontend**: React + TypeScript + Vite (modern, fast build tool)
-- **Backend**: Node.js + Express (RESTful API)
-- **Database**: AWS RDS PostgreSQL (relational database with snapshot support)
-- **File Processing**: PDF text extraction and analysis
+- **Frontend**: React 19 + TypeScript + Vite (modern, fast build tool)
+- **File Processing**: Client-side PDF text extraction (`pdfjs-dist`) and writing analysis (`analyzeWriting.ts`) in the browser
+- **Backend**: Node.js + Express 5 (RESTful API for saving stats and computing comparisons)
+- **Database**: AWS RDS PostgreSQL (relational database with snapshot support) or automatic in-memory fallback when no database is configured
 
 ---
 
@@ -19,110 +19,66 @@ The Writing Analyzer is a full-stack application with:
 ```javascript
 import express from 'express';
 import cors from 'cors';
-import multer from 'multer';
-// ... other imports
+import dotenv from 'dotenv';
+import { initializeDatabase, getPreviousUpload, saveUpload } from './database.js';
 ```
 
 **What this does:**
 - Uses ES6 modules (modern JavaScript)
-- `express`: Web server framework
+- `express`: Web server framework (Express 5)
 - `cors`: Allows frontend to make requests (Cross-Origin Resource Sharing)
-- `multer`: Handles file uploads
-- `pdf-parse`: Extracts text from PDF files
-- `pg`: PostgreSQL client library for database operations
+- `pg`: PostgreSQL client library for database operations (in `database.js`)
 
-### Step 2: PostgreSQL Database Configuration (`backend/database.js`)
+### Step 2: Database Configuration & Fallback (`backend/database.js`)
 
 ```javascript
 import pg from 'pg';
 const { Pool } = pg;
 
-const pool = new Pool({
-  host: process.env.DB_HOST,
-  port: process.env.DB_PORT || 5432,
-  database: process.env.DB_NAME,
-  user: process.env.DB_USER,
-  password: process.env.DB_PASSWORD,
-  ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : false,
-});
-```
-
-**What this does:**
-- Creates a PostgreSQL connection pool for efficient database connections
-- Uses environment variables for database credentials
-- Supports SSL connections for RDS (required for AWS)
-- Connection pooling allows multiple concurrent requests
-
-### Step 3: File Upload Configuration
-
-```javascript
-const upload = multer({ 
-  dest: 'uploads/',
-  limits: { fileSize: 50 * 1024 * 1024 } // 50MB limit
-});
-```
-
-**What this does:**
-- Configures multer to save uploaded files to `uploads/` directory
-- Sets a 50MB file size limit for security
-- Files are temporarily stored, then deleted after processing
-
-### Step 4: Writing Analysis Function
-
-```javascript
-function analyzeWriting(text) {
-  const cleanText = text.replace(/\s+/g, ' ').trim();
-  const words = cleanText.split(/\s+/).filter(word => word.length > 0);
-  const wordCount = words.length;
-  // ... more analysis
+if (process.env.DB_HOST && process.env.DB_USER && process.env.DB_PASSWORD) {
+  pool = new Pool({
+    host: process.env.DB_HOST,
+    port: process.env.DB_PORT || 5432,
+    database: process.env.DB_NAME || 'writing_analyzer',
+    user: process.env.DB_USER,
+    password: process.env.DB_PASSWORD,
+    ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : false,
+  });
 }
 ```
 
 **What this does:**
-- Cleans the text (removes extra whitespace)
-- Splits text into words, sentences, paragraphs
-- Calculates statistics:
-  - Word count: Number of words
-  - Sentence count: Split by `.`, `!`, `?`
-  - Paragraph count: Split by double newlines
-  - Averages: Words per sentence, characters per word
+- Creates a PostgreSQL connection pool when `DB_HOST`, `DB_USER`, and `DB_PASSWORD` are set
+- Automatically falls back to in-memory storage (`latestUpload`) when database credentials are omitted
+- Supports SSL connections for RDS
 
-### Step 5: Database Functions (`backend/database.js`)
+### Step 3: Database Functions (`backend/database.js`)
 
 **`initializeDatabase()`:**
-- Creates the `writing_uploads` table if it doesn't exist
-- Creates an index on `created_at` for faster queries
-- Called automatically on server startup
+- Connects to PostgreSQL and creates the `writing_uploads` table if configured, or initializes in-memory mode
+- Called automatically on server startup before listening on `PORT`
 
 **`getPreviousUpload()`:**
-- Queries PostgreSQL for the stored upload (only one row exists)
-- Returns the previous upload's statistics for comparison
-- Returns `null` if no previous upload exists
+- Queries PostgreSQL (or reads `latestUpload` in memory) for the stored upload (only one row exists)
+- Returns the previous upload's statistics for comparison, or `null` if none exists
 
-**`saveUpload()`:**
-- Deletes any existing row, then inserts the new statistics
-- Only the most recent upload is kept (replaces on each upload)
+**`saveUpload(stats)`:**
+- Deletes any existing row (`DELETE FROM writing_uploads`), then inserts the new statistics (or overwrites `latestUpload` in memory)
+- Only the most recent upload is kept
 - Minimizes storage for cost-effective snapshot workflow
 - Returns the created timestamp
 
-### Step 6: API Endpoint - `/api/analyze`
+### Step 4: API Endpoints (`backend/server.js`)
 
-**Flow:**
-1. Receives uploaded PDF file via `multer`
-2. Reads PDF file from disk
-3. Extracts text using `pdf-parse`
-4. Analyzes text with `analyzeWriting()`
-5. Fetches previous upload from PostgreSQL (single row, if any)
-6. Calculates differences (current - previous)
-7. Saves current upload to PostgreSQL (replaces previous - only one row kept)
-8. Deletes temporary file
-9. Returns JSON response with stats and differences
+**`POST /api/stats`:**
+1. Receives pre-computed `{ stats }` JSON payload from the frontend
+2. Fetches previous upload via `getPreviousUpload()`
+3. Saves current stats via `saveUpload(stats)` (replaces previous upload)
+4. Calculates differences (`current - previous`) for word, sentence, character, and paragraph counts
+5. Returns JSON response with `stats`, `differences`, and `previousUpload` summary
 
-**Error Handling:**
-- Validates file exists
-- Handles PDF parsing errors
-- Handles database errors gracefully
-- Always cleans up temporary files
+**`GET /api/health`:**
+- Returns `{ status: 'ok' }` for health checks
 
 ---
 
@@ -132,7 +88,8 @@ function analyzeWriting(text) {
 
 ```
 App.tsx (Main Container)
-├── FileUpload.tsx (Handles PDF upload)
+├── FileUpload.tsx (Browser PDF extraction via pdfjs-dist + POST /api/stats)
+│   └── utils/analyzeWriting.ts (Computes writing statistics from extracted text)
 ├── StatsDisplay.tsx (Shows statistics with comparisons)
 └── ProgressBar.tsx (100k word progress visualization)
 ```
@@ -149,22 +106,24 @@ App.tsx (Main Container)
 - Passes callbacks to child components
 - Conditionally renders components based on state
 
-### Step 2: FileUpload Component (`FileUpload.tsx`)
+### Step 2: FileUpload Component (`FileUpload.tsx`) & Analysis (`utils/analyzeWriting.ts`)
 
 **Key Features:**
 - Hidden file input (styled upload area)
-- Click or drag-and-drop support
-- File validation (PDF only, size limit)
-- Uploads to backend API
+- File validation (PDF only, 50MB size limit)
+- Extracts PDF text directly in the browser using `pdfjs-dist` (worker loaded from unpkg CDN to avoid `.mjs` MIME issues)
+- Reconstructs line and paragraph breaks using PDF text item Y-coordinate gaps (`transform[5]`)
+- Runs `analyzeWriting(text)` to compute word, sentence, paragraph, and character metrics
+- Sends computed stats JSON to `POST /api/stats`
 
 **Process:**
-1. User selects/clicks upload area
-2. Validates file type and size
-3. Creates `FormData` with file
-4. Sends POST request to `/api/analyze`
-5. Shows loading state
-6. Calls `onAnalysisComplete` with results
-7. Handles errors gracefully
+1. User selects a PDF file
+2. Validates file type (`application/pdf`) and size ($\le$ 50MB)
+3. Reads file into `Uint8Array` and parses pages with `pdfjsLib.getDocument`
+4. Computes statistics via `analyzeWriting(text)`
+5. Sends `POST /api/stats` with `{ stats }`
+6. Calls `onAnalysisComplete` with the backend response
+7. Handles errors and resets file input
 
 ### Step 3: StatsDisplay Component (`StatsDisplay.tsx`)
 
@@ -204,21 +163,21 @@ const percentage = Math.min((wordCount / TARGET_WORDS) * 100, 100);
 ## Data Flow
 
 ```
-User Uploads PDF
+User Selects PDF
     ↓
 FileUpload Component
     ↓
-POST /api/analyze (Backend)
+Extract Text in Browser (pdfjs-dist)
     ↓
-Extract Text from PDF
+Analyze Writing Statistics (analyzeWriting.ts)
     ↓
-Analyze Writing Statistics
+POST /api/stats (Backend)
     ↓
-Query PostgreSQL for Previous Upload
+Query PostgreSQL / In-Memory Store for Previous Upload
+    ↓
+Save Current Stats (Replaces Previous Upload)
     ↓
 Calculate Differences
-    ↓
-Save to PostgreSQL
     ↓
 Return JSON Response
     ↓
@@ -285,46 +244,46 @@ CREATE TABLE writing_uploads (
 
 ## Security Considerations
 
-1. **File Size Limits**: 50MB max to prevent DoS
-2. **File Type Validation**: Only PDFs accepted
-3. **Temporary Files**: Always deleted after processing
-4. **Environment Variables**: Sensitive data in `.env` (not in git)
-5. **CORS**: Configured to allow frontend requests
-6. **Error Handling**: No sensitive info leaked in errors
+1. **Client-Side PDF Parsing**: PDF files never leave the user's browser; only lightweight numeric statistics (`1mb` JSON payload limit) are sent to the backend
+2. **File Size & Type Validation**: Only PDFs up to 50MB are accepted in the UI
+3. **Environment Variables & Secrets**: Sensitive database credentials live in `.env` or Kubernetes Secrets (`writing-analyzer-db`, not committed to git)
+4. **CORS**: Configured to allow frontend requests
+5. **Error Handling**: No sensitive info leaked in errors
 
 ---
 
 ## Deployment Considerations
 
-### Kubernetes + Nginx
+### AWS EKS, Kubernetes + Nginx
 
-**Frontend:**
-- Build with `npm run build` → creates `dist/` folder
-- Serve static files via nginx
-- Configure nginx to proxy `/api/*` to backend
+**Infrastructure (`terraform/`):**
+- Provisions `writing-analyzer-vpc` (`10.0.0.0/16`) and an Amazon EKS Auto Mode cluster (`general-purpose` node pool)
 
-**Backend:**
-- Run in separate container/pod
-- Expose port 3001
-- Set environment variables via Kubernetes secrets
+**Frontend (`k8s/frontend.yaml`, `frontend/Dockerfile`, `frontend/nginx.conf`):**
+- Multi-stage Docker build (`npm run build` → `dist/`) served by `nginx:alpine`
+- Exposed via an internet-facing AWS LoadBalancer `Service` on port 80
+- Nginx proxies `/api/*` requests to `writing-analyzer-backend.writing-analyzer.svc.cluster.local:3001` using the EKS cluster DNS resolver (`172.20.0.10`)
 
-**Environment Variables Needed:**
+**Backend (`k8s/backend.yaml`, `backend/Dockerfile`):**
+- Runs in a separate pod (`ClusterIP` service on port 3001)
+- Reads optional database credentials from the `writing-analyzer-db` Kubernetes Secret (if the secret is absent, runs in in-memory mode)
+
+**Environment Variables (Optional for DB Persistence):**
 - `DB_HOST` - RDS endpoint or localhost
 - `DB_PORT` - PostgreSQL port (default: 5432)
-- `DB_NAME` - Database name
+- `DB_NAME` - Database name (default: `writing_analyzer`)
 - `DB_USER` - Database username
 - `DB_PASSWORD` - Database password
-- `DB_SSL` - 'true' for RDS, 'false' for local
+- `DB_SSL` - `'true'` for RDS, `'false'` for local
 - `PORT` - Backend server port (optional, defaults to 3001)
 
 **RDS Snapshot Workflow (Cost-Optimized):**
-1. Create RDS PostgreSQL instance via Terraform
-2. Restore from snapshot (if exists) when starting session
-3. Application auto-creates table schema on startup
-4. Use application - only the most recent upload is stored (replaced on each upload)
-5. Take final snapshot when done
-6. Delete the database instance - you only pay for snapshot storage
-7. Next session: restore from snapshot into a new database to continue
+1. Create an RDS PostgreSQL instance (or restore from snapshot) and apply `k8s/db-secret.yaml`
+2. Application auto-creates table schema on startup
+3. Use application - only the most recent upload is stored (replaced on each upload)
+4. Take final snapshot when done
+5. Delete the database instance - you only pay for snapshot storage
+6. Next session: restore from snapshot into a new database to continue
 
 ---
 

@@ -1,4 +1,4 @@
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 import * as pdfjsLib from 'pdfjs-dist';
 import { analyzeWriting } from '../utils/analyzeWriting';
 import './FileUpload.css';
@@ -14,13 +14,11 @@ interface FileUploadProps {
 
 function FileUpload({ onAnalysisComplete, onError, onLoading }: FileUploadProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isDragging, setIsDragging] = useState(false);
   const API_URL = import.meta.env.VITE_API_URL || '';
 
-  const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    if (file.type !== 'application/pdf') {
+  const processFile = async (file: File) => {
+    if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
       onError('Please upload a PDF file');
       return;
     }
@@ -86,6 +84,34 @@ function FileUpload({ onAnalysisComplete, onError, onLoading }: FileUploadProps)
     }
   };
 
+  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    processFile(file);
+  };
+
+  const handleDragOver = (event: React.DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (!isDragging) setIsDragging(true);
+  };
+
+  const handleDragLeave = (event: React.DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setIsDragging(false);
+  };
+
+  const handleDrop = (event: React.DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setIsDragging(false);
+
+    const file = event.dataTransfer.files?.[0];
+    if (!file) return;
+    processFile(file);
+  };
+
   const handleClick = () => fileInputRef.current?.click();
 
   return (
@@ -97,7 +123,13 @@ function FileUpload({ onAnalysisComplete, onError, onLoading }: FileUploadProps)
         onChange={handleFileSelect}
         style={{ display: 'none' }}
       />
-      <div className="upload-area" onClick={handleClick}>
+      <div
+        className={`upload-area${isDragging ? ' dragging' : ''}`}
+        onClick={handleClick}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+      >
         <div className="upload-icon">
           <svg
             width="64"

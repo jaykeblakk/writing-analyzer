@@ -12,7 +12,8 @@
   transition: all 0.3s ease;
 }
 
-.upload-area:hover {
+.upload-area:hover,
+.upload-area.dragging {
   background: #1f1f3a;
   border-color: #764ba2;
   transform: translateY(-2px);

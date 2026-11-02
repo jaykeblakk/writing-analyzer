@@ -1,26 +1,24 @@
 # Writing Analyzer
 
-A React application that analyzes writing from PDF documents, tracks progress toward a 100,000 word goal, and compares the writing of the current file from .
+A React application that analyzes writing from PDF documents, tracks progress toward a 100,000 word goal, and compares the writing statistics of the current file against the previous upload.
 
 ## Tech Stack
 
 ### Frontend
-- React 18 with TypeScript
+- React 19 with TypeScript
 - Vite
+- `pdfjs-dist` (client-side PDF text extraction)
 - CSS3
 
 ### Backend
-- Node.js with Express
-- pdf-parse
-- PostgreSQL
-- Multer
+- Node.js with Express 5
+- PostgreSQL (`pg`) with automatic in-memory fallback
 
 ## Setup Instructions
 
 ### Prerequisites
 - Node.js (v18 or higher)
-- AWS RDS PostgreSQL database (or local PostgreSQL for development)
-- Database connection credentials
+- Optional: AWS RDS PostgreSQL database (or local PostgreSQL for development). If no database is configured, the backend automatically uses in-memory storage.
 
 ### Backend Setup
 
@@ -34,7 +32,7 @@ cd backend
 npm install
 ```
 
-3. Create a `.env` file in the `backend` directory:
+3. (Optional) Create a `.env` file in the `backend` directory for PostgreSQL persistence:
 ```env
 DB_HOST=your-rds-endpoint.region.rds.amazonaws.com
 DB_PORT=5432
@@ -45,7 +43,7 @@ DB_SSL=true
 PORT=3001
 ```
 
-**Note**: For local development, you can use:
+**Note**: For local PostgreSQL development, you can use:
 ```env
 DB_HOST=localhost
 DB_PORT=5432
@@ -55,8 +53,9 @@ DB_PASSWORD=your-local-password
 DB_SSL=false
 PORT=3001
 ```
+If `DB_HOST`, `DB_USER`, and `DB_PASSWORD` are omitted, the server runs in in-memory mode.
 
-4. The database table will be automatically created on first startup. Alternatively, you can manually run the schema:
+4. When PostgreSQL is configured, the database table is automatically created on first startup. Alternatively, you can manually run the schema:
 ```bash
 psql -h your-host -U your-user -d your-database -f schema.sql
 ```
@@ -80,7 +79,7 @@ cd frontend
 npm install
 ```
 
-3. Create a `.env` file in the `frontend` directory (optional, defaults to localhost):
+3. Create a `.env` file in the `frontend` directory (optional, defaults to current origin / `http://localhost:3001` in local dev):
 ```env
 VITE_API_URL=http://localhost:3001
 ```
@@ -97,27 +96,19 @@ npm run build
 
 ## Deployment
 
-### Kubernetes & Nginx
+### AWS EKS, Kubernetes & Nginx
 
-The application is designed to run in a Kubernetes container with nginx serving the frontend.
+The infrastructure and deployment manifests are included in `terraform/` and `k8s/` (see [DEPLOY.md](./DEPLOY.md) for step-by-step instructions):
 
-1. **Build the frontend**:
-```bash
-cd frontend
-npm run build
-```
-
-2. **Create Docker images** for both frontend and backend
-
-3. **Configure nginx** to serve the frontend static files and proxy API requests to the backend
-
-4. **Set environment variables** in your Kubernetes deployment for database credentials
+- **Terraform (`terraform/`)**: Provisions the VPC (`writing-analyzer-vpc`) and an Amazon EKS cluster (EKS Auto Mode).
+- **Docker (`frontend/Dockerfile`, `backend/Dockerfile`)**: Builds the frontend static bundle served by Nginx and the Node.js Express API image.
+- **Kubernetes (`k8s/`)**: Deploys the frontend (`LoadBalancer` service) and backend (`ClusterIP` service) in the `writing-analyzer` namespace, with Nginx proxying `/api/*` requests to the backend service.
 
 ### Database Snapshots (RDS) - Cost-Optimized Workflow
 
-This application is designed for a minimal-cost RDS snapshot workflow:
+This application supports a minimal-cost RDS snapshot workflow (or can run without RDS using in-memory storage):
 
-1. **Initial Setup**: Create an RDS PostgreSQL database via Terraform
+1. **Initial Setup**: Create an RDS PostgreSQL database (or restore from snapshot) and apply `k8s/db-secret.yaml`
 2. **Restore from Snapshot**: Restore your database from a snapshot when starting a session
 3. **Usage**: Upload and analyze your writing - **only the most recent upload is stored** (each new upload replaces the previous one)
 4. **Final Snapshot**: When done, take a snapshot of the database
@@ -130,20 +121,20 @@ By storing only one row and keeping just the snapshot between sessions, you mini
 
 ### Step-by-Step Process
 
-1. **File Upload**: User uploads a PDF file through the React frontend
-2. **PDF Processing**: Backend receives the file, extracts text using `pdf-parse`
-3. **Analysis**: The text is analyzed to calculate:
+1. **File Upload**: User selects a PDF file through the React frontend (`FileUpload.tsx`)
+2. **Browser PDF Processing**: The frontend extracts text directly in the browser using `pdfjs-dist`
+3. **Client-Side Analysis**: The extracted text is analyzed in the browser (`analyzeWriting.ts`) to calculate:
    - Word count
    - Sentence count
    - Paragraph count
    - Character counts (with and without spaces)
    - Average words per sentence
    - Average characters per word
-4. **Database Lookup**: Backend queries PostgreSQL for the previous upload (if any)
-5. **Comparison**: Calculates differences between current and previous stats
-6. **Storage**: Saves current stats to PostgreSQL (replaces previous upload - only one row is ever kept)
-7. **Response**: Returns stats and differences to frontend
-8. **Display**: Frontend displays stats with green indicators for increases, progress bar, and percentage
+4. **API Request**: Frontend sends the computed `stats` JSON to `POST /api/stats`
+5. **Database Lookup**: Backend queries PostgreSQL (or in-memory store) for the previous upload (if any)
+6. **Storage & Comparison**: Backend saves the current stats (replacing the previous upload so only one row is kept) and calculates differences between current and previous stats
+7. **Response**: Returns `stats`, `differences`, and `previousUpload` metadata to the frontend
+8. **Display**: Frontend displays stats with green `+X` indicators for increases, a 100k-word progress bar, and completion percentage
 
 ### Database Schema
 
@@ -168,20 +159,28 @@ writing-analyzer/
 ├── frontend/
 │   ├── src/
 │   │   ├── components/
-│   │   │   ├── FileUpload.tsx      # PDF upload component
+│   │   │   ├── FileUpload.tsx      # Browser PDF parsing & upload component
 │   │   │   ├── StatsDisplay.tsx    # Statistics display with comparisons
 │   │   │   └── ProgressBar.tsx     # 100k word progress bar
+│   │   ├── utils/
+│   │   │   └── analyzeWriting.ts   # Text analysis calculations
 │   │   ├── App.tsx                 # Main application component
 │   │   ├── main.tsx                # React entry point
 │   │   └── index.css               # Global dark theme styles
+│   ├── Dockerfile
+│   ├── nginx.conf                  # Nginx static server + /api/ reverse proxy
 │   ├── index.html
 │   └── package.json
 ├── backend/
-│   ├── server.js                   # Express API server
-│   ├── database.js                 # PostgreSQL connection and queries
+│   ├── server.js                   # Express API server (/api/stats, /api/health)
+│   ├── database.js                 # PostgreSQL connection & in-memory fallback
 │   ├── schema.sql                  # Database schema (optional manual setup)
-│   ├── package.json
-│   └── .env                        # Environment variables (not in git)
+│   ├── Dockerfile
+│   └── package.json
+├── k8s/                            # Kubernetes manifests (Namespace, Deployments, Services, NodePool)
+├── terraform/                      # Terraform configs for AWS VPC & EKS Auto Mode cluster
+├── DEPLOY.md                       # EKS deployment guide
+├── ARCHITECTURE.md                 # Architecture & code walkthrough
 └── README.md
 ```
 

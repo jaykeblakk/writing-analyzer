@@ -1,0 +1,5 @@
+# Copy to terraform.tfvars and customize (or set these in HCP Terraform)
+
+aws_region = "us-west-1"
+cluster_name = "writing-analyzer"
+cluster_version = "1.35"

@@ -1,5 +1,4 @@
-# Example Dockerfile for backend
-# This is a reference - adjust based on your Kubernetes setup
+
 
 FROM node:18-alpine
 
